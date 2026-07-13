@@ -14,9 +14,6 @@ export default function Home() {
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [aiInterpretation, setAiInterpretation] = useState("");
-  const [cartCount, setCartCount] = useState(0);
-  const [addedItemName, setAddedItemName] = useState<string | null>(null);
-  const [toastTimeout, setToastTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Fetch initial menu
   useEffect(() => {
@@ -76,18 +73,6 @@ export default function Home() {
     setSearchQuery("");
     setAiInterpretation("");
     handleSearch("", false);
-  };
-
-  const handleAddItem = (item: MenuItem) => {
-    setCartCount((prev) => prev + 1);
-    setAddedItemName(item.name);
-
-    if (toastTimeout) clearTimeout(toastTimeout);
-
-    const timeout = setTimeout(() => {
-      setAddedItemName(null);
-    }, 2500);
-    setToastTimeout(timeout);
   };
 
   return (
@@ -173,55 +158,17 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            /* Responsive Grid system: single column on mobiles, 2 columns on wide screens */
+            /* Responsive Grid system */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {items.map((item) => (
                 <FoodCard
                   key={item.id}
                   item={item}
-                  onAddClick={handleAddItem}
                 />
               ))}
             </div>
           )}
         </main>
-      </div>
-
-      {/* Floating Add to Cart feedback animation overlay */}
-      {addedItemName && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-white text-black font-semibold text-xs py-2 px-4 rounded-full shadow-2xl flex items-center gap-2 animate-bounce border border-black/5">
-          <ShoppingBag className="w-3.5 h-3.5 text-accent-brand" />
-          <span>Added {addedItemName}!</span>
-        </div>
-      )}
-
-      {/* Bottom Sticky Status Action bar (for mobile app experience) */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4">
-        <div className="bg-[#121212]/95 border border-white/10 rounded-full py-3 px-6 shadow-2xl flex items-center justify-between backdrop-blur-md">
-          <div className="flex flex-col">
-            <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">
-              Menu Book
-            </span>
-            <span className="text-white text-xs font-bold">
-              {cartCount === 0 ? "Empty Cart" : `${cartCount} items selected`}
-            </span>
-          </div>
-          <button
-            onClick={() => cartCount > 0 && alert("Checkout details: dummy interface.")}
-            disabled={cartCount === 0}
-            className={`
-              flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all
-              ${
-                cartCount > 0
-                  ? "bg-accent-brand text-white hover:bg-accent-brand-hover cursor-pointer"
-                  : "bg-white/10 text-white/40 cursor-not-allowed"
-              }
-            `}
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Order Now</span>
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -6,9 +6,7 @@ import Image from "next/image";
 import { getMenuItem } from "@/lib/api";
 import { MenuItem } from "@/lib/dummy-data";
 import RatingBadge from "@/components/RatingBadge";
-import QuantitySelector from "@/components/QuantitySelector";
-import AddButton from "@/components/AddButton";
-import { ArrowLeft, Flame, Check } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 interface ItemPageProps {
   params: Promise<{ id: string }>;
@@ -20,8 +18,6 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
 
   const [item, setItem] = useState<MenuItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [quantity, setQuantity] = useState(1);
-  const [isAdded, setIsAdded] = useState(false);
 
   useEffect(() => {
     async function loadItem() {
@@ -37,15 +33,6 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
     }
     loadItem();
   }, [id]);
-
-  const handleAddToCart = () => {
-    if (!item) return;
-    setIsAdded(true);
-    // Visual timer success reset
-    setTimeout(() => {
-      setIsAdded(false);
-    }, 2000);
-  };
 
   if (isLoading) {
     return (
@@ -76,12 +63,10 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
     );
   }
 
-  const totalPrice = item.price * quantity;
-
   return (
     <div className="min-h-screen text-white flex flex-col items-center">
-      {/* Container wrapper mimicking interactive phone or layout grid */}
-      <div className="w-full max-w-2xl min-h-screen bg-black/60 shadow-2xl flex flex-col border-x border-white/5 pb-32 relative">
+      {/* Container wrapper */}
+      <div className="w-full max-w-2xl min-h-screen bg-black/60 shadow-2xl flex flex-col border-x border-white/5 pb-12 relative animate-fade-in">
         
         {/* Floating circular Back Action arrow button */}
         <div className="absolute top-4 left-4 z-30">
@@ -111,21 +96,19 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
         <div className="px-6 py-6 flex flex-col gap-4">
           <div className="flex justify-between items-start gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                {item.name}
-              </h1>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  {item.name}
+                </h1>
+                <span className="text-xl sm:text-2xl font-black text-accent-brand whitespace-nowrap">
+                  ${item.price.toFixed(2)}
+                </span>
+              </div>
               {item.category && (
-                <span className="text-xs font-bold text-accent-brand uppercase tracking-wider mt-1 block">
+                <span className="text-xs font-bold text-accent-brand uppercase tracking-wider mt-1.5 block">
                   {item.category}
                 </span>
               )}
-            </div>
-            {/* Calories badge */}
-            <div className="bg-info-kcal/10 border border-info-kcal/20 px-3 py-1 rounded-full shrink-0 flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5 text-info-kcal fill-info-kcal/15" />
-              <span className="text-xs font-bold text-info-kcal tracking-wide">
-                {item.kcal} Kcal
-              </span>
             </div>
           </div>
 
@@ -154,40 +137,6 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
             <p className="text-sm text-text-muted leading-relaxed font-sans">
               {item.description}
             </p>
-          </div>
-
-          {/* Controls: Quantity selectors */}
-          <div className="flex items-center justify-between border-t border-white/5 pt-6 mt-2">
-            <span className="text-sm font-bold text-white uppercase tracking-wider">
-              Quantity / Portions
-            </span>
-            <QuantitySelector quantity={quantity} onChange={setQuantity} />
-          </div>
-        </div>
-
-        {/* App-pinned action bar button details */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#0f0a0b]/95 border-t border-white/10 backdrop-blur-md z-40 py-4 px-6 flex justify-between items-center gap-4 max-w-2xl mx-auto shadow-[0_-8px_30px_rgb(0,0,0,0.5)]">
-          <div className="flex flex-col">
-            <span className="text-[10px] text-text-muted font-semibold uppercase tracking-wider">
-              Total Order Price
-            </span>
-            <span className="text-white text-xl font-extrabold">
-              ${totalPrice.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="w-48 sm:w-60">
-            <AddButton
-              size="lg"
-              onClick={handleAddToCart}
-              label={isAdded ? "Added!" : `Add to Cart`}
-              className={`w-full flex items-center justify-center gap-2 h-12 ${
-                isAdded ? "bg-emerald-600 hover:bg-emerald-700" : ""
-              }`}
-              disabled={isAdded}
-            >
-              {isAdded && <Check className="w-4 h-4 animate-scale-up" />}
-            </AddButton>
           </div>
         </div>
 

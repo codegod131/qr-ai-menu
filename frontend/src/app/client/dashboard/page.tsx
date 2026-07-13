@@ -333,22 +333,6 @@ export default function ClientDashboardPage() {
                     />
                   </div>
 
-                  {/* Kcal fields */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
-                      Calories Count (Kcal)
-                    </label>
-                    <input
-                      type="number"
-                      value={kcal}
-                      onChange={(e) => setKcal(e.target.value)}
-                      placeholder="e.g. 480"
-                      className="w-full bg-[#121212] text-white text-sm px-4 py-3 rounded-xl border border-white/10 outline-none focus:border-accent-brand transition-colors"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Category select fields */}
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
@@ -368,6 +352,7 @@ export default function ClientDashboardPage() {
                       <option value="Desserts">Sweet Treats</option>
                     </select>
                   </div>
+                </div>
 
                   {/* Optional Image Upload or URL */}
                   <div className="flex flex-col gap-1">
@@ -431,7 +416,6 @@ export default function ClientDashboardPage() {
                       />
                     </div>
                   </div>
-                </div>
 
                 {/* Comma tags strings */}
                 <div className="flex flex-col gap-1">
@@ -529,7 +513,7 @@ export default function ClientDashboardPage() {
                           {item.name}
                         </span>
                         <span className="text-[10px] text-accent-brand font-medium">
-                          {item.category || "General"} — {item.kcal} Kcal
+                          {item.category || "General"}
                         </span>
                       </div>
                       
