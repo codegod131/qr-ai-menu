@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app
 
@@ -13,7 +14,11 @@ class TestAPI(unittest.TestCase):
         # (This is just a precaution; the delete test at the end handles normal cleanup)
         pass
 
-    def test_e2e_flow(self):
+    @patch("main.get_item_embedding")
+    def test_e2e_flow(self, mock_get_embedding):
+        # Mock the embedding generator to return a 768-dimension vector
+        mock_get_embedding.return_value = [0.1] * 768
+
         # 1. Check health
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)

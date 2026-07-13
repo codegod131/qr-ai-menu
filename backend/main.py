@@ -11,6 +11,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from database import get_db
+from embeddings import get_item_embedding
 
 app = FastAPI(title="QR AI Menu Backend")
 
@@ -253,11 +254,14 @@ def create_item(
     Create a new catalog item. Requires authentication headers.
     The item is automatically linked to the authenticated business.
     """
+    # Generate the vector embedding using text-embedding-004 model
+    embedding_vector = get_item_embedding(item.name, item.description, item.tags)
+
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
-            INSERT INTO items (business_id, name, price, description, tags, image_url)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO items (business_id, name, price, description, tags, image_url, embedding)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id, business_id, name, price, description, tags, image_url, created_at
             """,
             (
@@ -266,7 +270,8 @@ def create_item(
                 item.price,
                 item.description.strip(),
                 item.tags,
-                item.image_url
+                item.image_url,
+                embedding_vector
             )
         )
         new_item = cur.fetchone()
@@ -355,11 +360,15 @@ def update_item(
                     detail="You are not authorized to update items for another business"
                 )
             
-            # 2. Update the item
+        # Generate new vector embedding using text-embedding-004 model
+        embedding_vector = get_item_embedding(item_update.name, item_update.description, item_update.tags)
+            
+        # 2. Update the item
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 UPDATE items
-                SET name = %s, price = %s, description = %s, tags = %s, image_url = %s
+                SET name = %s, price = %s, description = %s, tags = %s, image_url = %s, embedding = %s
                 WHERE id = %s
                 RETURNING id, business_id, name, price, description, tags, image_url, created_at
                 """,
@@ -369,6 +378,7 @@ def update_item(
                     item_update.description.strip(),
                     item_update.tags,
                     item_update.image_url,
+                    embedding_vector,
                     item_id
                 )
             )
