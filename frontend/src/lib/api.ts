@@ -55,3 +55,53 @@ export async function aiSearchMenu(query: string): Promise<AISearchResponse> {
   }
   return res.json();
 }
+
+export function mapBackendToMenuItem(item: any): MenuItem {
+  let description = item.description || "";
+  let category = "General";
+  let kcal = 0;
+
+  if (description.includes(" ||| ")) {
+    const parts = description.split(" ||| ");
+    description = parts[0];
+    try {
+      const metadata = JSON.parse(parts[1]);
+      category = metadata.category || "General";
+      kcal = Number(metadata.kcal) || 0;
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  } else {
+    // Fallback parse logic
+    const tags = item.tags || [];
+    const categoryTag = tags.find((t: string) => t.startsWith("_cat:"));
+    if (categoryTag) {
+      category = categoryTag.substring(5);
+    }
+  }
+
+  const tags = (item.tags || []).filter((t: string) => !t.startsWith("_cat:"));
+
+  // Stable mock rating based on id hash
+  const idStr = String(item.id);
+  let hash = 0;
+  for (let i = 0; i < idStr.length; i++) {
+    hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const rating = (4.0 + (Math.abs(hash) % 10) * 0.1).toFixed(1);
+  const ratingsCount = 10 + (Math.abs(hash) % 290);
+
+  return {
+    id: item.id,
+    name: item.name,
+    kcal,
+    rating: parseFloat(rating),
+    ratingsCount,
+    description,
+    price: Number(item.price),
+    image: item.image_url || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80",
+    category,
+    tags,
+  };
+}
+

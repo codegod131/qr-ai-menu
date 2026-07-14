@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { menuItems, MenuItem } from "@/lib/dummy-data";
+import { MenuItem } from "@/lib/dummy-data";
+import { mapBackendToMenuItem } from "@/lib/api";
+
+const BACKEND_URL = process.env.BACKEND_API_URL || "http://127.0.0.1:8000";
 
 export async function POST(request: NextRequest) {
   try {
     const { query } = await request.json();
+
+    // Fetch live list of items from the backend
+    const res = await fetch(`${BACKEND_URL}/api/items?business_slug=cafe-mocha`, {
+      cache: "no-store"
+    });
+    if (!res.ok) {
+      return NextResponse.json({ error: "Failed to fetch items for search" }, { status: res.status });
+    }
+    const backendData = await res.json();
+    const mappedItems: MenuItem[] = backendData.map(mapBackendToMenuItem);
 
     // Simulate AI model processing time (800ms)
     await new Promise((resolve) => setTimeout(resolve, 800));
 
     if (!query || typeof query !== "string") {
       return NextResponse.json({
-        items: menuItems,
+        items: mappedItems,
         interpretedQuery: "AI understood: Show whole menu book.",
       });
     }
@@ -33,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Keyword relevance score tracking to simulate semantic search ranking
     const keywords = cleanQuery.split(/\s+/).filter(Boolean);
-    const scoredItems = menuItems.map(item => {
+    const scoredItems = mappedItems.map(item => {
       let score = 0;
       const textToSearch = `${item.name} ${item.description} ${item.category || ""}`.toLowerCase();
       
@@ -41,7 +54,6 @@ export async function POST(request: NextRequest) {
         if (textToSearch.includes(keyword)) {
           score += 2; // direct match
         }
-        // Substring details weight
         if (item.name.toLowerCase().includes(keyword)) {
           score += 3; // name matches have higher weight
         }
@@ -55,14 +67,13 @@ export async function POST(request: NextRequest) {
       .sort((a, b) => b.score - a.score)
       .map(entry => entry.item);
 
-    // If no keyword match found, fall back to basic text index filter or returning empty state
     const resultItems = filteredItems.length > 0 ? filteredItems : [];
 
     return NextResponse.json({
       items: resultItems,
       interpretedQuery,
     });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to process AI search Request" }, { status: 400 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Failed to process AI search Request" }, { status: 400 });
   }
 }
