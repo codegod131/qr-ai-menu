@@ -1,26 +1,151 @@
 "use client";
 
-import { useEffect, useState, startTransition } from "react";
-import Image from "next/image";
-import SearchBar from "@/components/SearchBar";
-import FoodCard from "@/components/FoodCard";
+import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { MenuItem } from "@/lib/dummy-data";
 import { getMenuItems, searchMenu, aiSearchMenu } from "@/lib/api";
-import { ShoppingBag, Star, MapPin, Clock } from "lucide-react";
+
+// Web Audio API synth tones
+const playTone = (frequency: number, type: OscillatorType, duration: number, vol: number) => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+    
+    gainNode.gain.setValueAtTime(vol, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + duration);
+  } catch (e) {
+    console.error("Audio tones playback failed", e);
+  }
+};
+
+const playStartRecordingSound = () => {
+  playTone(523.25, 'sine', 0.15, 0.1); // C5
+  setTimeout(() => playTone(659.25, 'sine', 0.15, 0.1), 100); // E5
+  setTimeout(() => playTone(783.99, 'sine', 0.4, 0.1), 200); // G5
+};
+
+const playStopRecordingSound = () => {
+  playTone(783.99, 'sine', 0.15, 0.1); // G5
+  setTimeout(() => playTone(523.25, 'sine', 0.4, 0.1), 100); // C5
+};
+
+// Formats duration: e.g. 3 -> "0:03"
+const formatDuration = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+};
+
+// Separate Voice play component for message notes
+const VoiceMessageNode = ({ voiceUrl, voiceDuration }: { voiceUrl: string; voiceDuration: number }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio(voiceUrl);
+    const handleEnded = () => setIsPlaying(false);
+    audioRef.current.addEventListener("ended", handleEnded);
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeEventListener("ended", handleEnded);
+      }
+    };
+  }, [voiceUrl]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().catch((err) => console.error("Playback prompt blocked:", err));
+      setIsPlaying(true);
+    }
+  };
+
+  return (
+    <button
+      onClick={togglePlay}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: "#fff",
+        cursor: "pointer",
+        fontSize: "0.95rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+      }}
+    >
+      <i className={`fa-solid ${isPlaying ? "fa-pause" : "fa-play"}`}></i>
+      <span>{isPlaying ? "Playing..." : "Voice Note"}</span>
+      <span className="vn-duration">{formatDuration(voiceDuration)}</span>
+    </button>
+  );
+};
+
+interface ChatMessage {
+  id: string;
+  sender: "user" | "bot";
+  text?: string;
+  voiceUrl?: string;
+  voiceDuration?: number;
+}
 
 export default function Home() {
+  const [menuCatalog, setMenuCatalog] = useState<MenuItem[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [aiInterpretation, setAiInterpretation] = useState("");
 
-  // Fetch initial menu
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [scrollY, setScrollY] = useState(0);
+
+  // Chat panel states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInputText, setChatInputText] = useState("");
+  const [likedMessages, setLikedMessages] = useState<Record<string, "like" | "dislike">>({});
+
+  // Audio recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingVoiceUrl, setPendingVoiceUrl] = useState<string | null>(null);
+  const [pendingVoiceDuration, setPendingVoiceDuration] = useState(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartTimeRef = useRef<number | null>(null);
+  const chatMessagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const tagOptions = [
+    { id: "salad", label: "Tag 01" },
+    { id: "burger", label: "Tag 02" },
+    { id: "spicy", label: "Tag 03" },
+    { id: "dessert", label: "Tag 04" },
+    { id: "popular", label: "Tag 05" },
+  ];
+
+  // Fetch initial menu catalog
   useEffect(() => {
     async function loadInitial() {
       try {
         setIsLoading(true);
         const data = await getMenuItems();
+        setMenuCatalog(data);
         setItems(data);
       } catch (err) {
         console.error("Failed to load initial menu items", err);
@@ -32,144 +157,382 @@ export default function Home() {
     loadInitial();
   }, []);
 
-  const handleSearch = async (query: string, isAi: boolean) => {
-    setSearchQuery(query);
-    setIsLoading(true);
-    setErrorCode(null);
+  // Window scroll event for parallax effects on Hero
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-    // If query is empty, reset back to full menu
-    if (!query.trim()) {
-      try {
-        const data = await getMenuItems();
-        setItems(data);
-        setAiInterpretation("");
-      } catch (err) {
-        setErrorCode("Failed to reset menu.");
-      } finally {
-        setIsLoading(false);
-      }
+  // Auto-scroll chat panel to bottom
+  useEffect(() => {
+    if (chatMessagesEndRef.current) {
+      chatMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
+
+  const filterMenu = (tags: string[], catalog: MenuItem[] = menuCatalog) => {
+    if (tags.length === 0) {
+      setItems(catalog);
       return;
     }
+    const filtered = catalog.filter((item) => {
+      return tags.some((tagId) => {
+        if (tagId === "salad") {
+          return item.category?.toLowerCase() === "salad" || item.tags?.some((t) => t.toLowerCase() === "salad");
+        }
+        if (tagId === "burger") {
+          return item.category?.toLowerCase() === "burger" || item.tags?.some((t) => t.toLowerCase() === "burger");
+        }
+        if (tagId === "spicy") {
+          return item.tags?.some((t) => t.toLowerCase() === "spicy") || item.name.toLowerCase().includes("spicy");
+        }
+        if (tagId === "dessert") {
+          return item.category?.toLowerCase() === "dessert" || item.tags?.some((t) => t.toLowerCase() === "dessert");
+        }
+        if (tagId === "popular") {
+          return item.rating >= 4.5;
+        }
+        return false;
+      });
+    });
+    setItems(filtered);
+  };
 
+  const handleTagClick = (tagId: string) => {
+    setSelectedTags((prev) => {
+      const isSelected = prev.includes(tagId);
+      const nextTags = isSelected ? prev.filter((t) => t !== tagId) : [...prev, tagId];
+      filterMenu(nextTags);
+      return nextTags;
+    });
+  };
+
+  // Perform AI or plain backend search
+  const triggerBackendSearch = async (query: string) => {
+    setIsLoading(true);
+    setErrorCode(null);
     try {
-      if (isAi) {
-        const response = await aiSearchMenu(query);
-        setItems(response.items);
-        setAiInterpretation(response.interpretedQuery);
-      } else {
-        const data = await searchMenu(query);
-        setItems(data);
-        setAiInterpretation("");
-      }
+      // Connects to FastAPI endpoint /api/menu/ai-search
+      const response = await aiSearchMenu(query);
+      setItems(response.items);
     } catch (err) {
-      console.error("Search error occurred", err);
-      setErrorCode("Could not search menu. Please try again.");
+      console.error("Search API failed", err);
+      // Fallback to text query locally or plain text filter
+      const textMatches = menuCatalog.filter(
+        (m) =>
+          m.name.toLowerCase().includes(query.toLowerCase()) ||
+          m.description.toLowerCase().includes(query.toLowerCase())
+      );
+      setItems(textMatches);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleClear = () => {
-    setSearchQuery("");
-    setAiInterpretation("");
-    handleSearch("", false);
+  const handleSend = async () => {
+    if (isRecording) {
+      // Stop recording and send immediately
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        setIsRecording(false);
+        playStopRecordingSound();
+        
+        // Setup listener on stop trigger to send once blob ready
+        mediaRecorderRef.current.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const elapsed = recordingStartTimeRef.current ? (Date.now() - recordingStartTimeRef.current) / 1000 : 0;
+          
+          const voiceMessageId = String(Date.now());
+          const botResponseId = String(Date.now() + 1);
+
+          setChatMessages((prev) => [
+            ...prev,
+            { id: voiceMessageId, sender: "user", voiceUrl: audioUrl, voiceDuration: elapsed },
+          ]);
+
+          // Trigger search for voice results (using "salad" or similar as demo criteria)
+          triggerBackendSearch("salad");
+
+          setTimeout(() => {
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: botResponseId,
+                sender: "bot",
+                text: "Got your voice note! Processing your request...",
+              },
+            ]);
+          }, 1000);
+        };
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+
+    if (pendingVoiceUrl) {
+      const voiceMessageId = String(Date.now());
+      const botResponseId = String(Date.now() + 1);
+
+      setChatMessages((prev) => [
+        ...prev,
+        { id: voiceMessageId, sender: "user", voiceUrl: pendingVoiceUrl, voiceDuration: pendingVoiceDuration },
+      ]);
+
+      setPendingVoiceUrl(null);
+      setPendingVoiceDuration(0);
+
+      // Trigger standard voice request loading
+      triggerBackendSearch("healthy dishes");
+
+      setTimeout(() => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: botResponseId,
+            sender: "bot",
+            text: "Got your voice note! Processing your request...",
+          },
+        ]);
+      }, 1000);
+      return;
+    }
+
+    const text = chatInputText.trim();
+    if (!text) return;
+
+    const userMessageId = String(Date.now());
+    const botResponseId = String(Date.now() + 1);
+
+    setChatMessages((prev) => [...prev, { id: userMessageId, sender: "user", text }]);
+    setChatInputText("");
+
+    // Invoke backend NLP query parsing
+    triggerBackendSearch(text);
+
+    setTimeout(() => {
+      // Craft response mentioning their preference
+      const isSalad = text.toLowerCase().includes("salad");
+      const isBurger = text.toLowerCase().includes("burger");
+      let botText = "Thanks for sharing your preference! I am finding the best options for you.";
+      if (isSalad) {
+        botText = "Thanks for sharing your preference! I am finding the best salads for you.";
+      } else if (isBurger) {
+        botText = "Thanks for sharing your preference! I am finding the best burgers for you.";
+      }
+      setChatMessages((prev) => [...prev, { id: botResponseId, sender: "bot", text: botText }]);
+    }, 1000);
+  };
+
+  const handleMicClick = async () => {
+    if (pendingVoiceUrl) {
+      // Discard voice note
+      setPendingVoiceUrl(null);
+      setPendingVoiceDuration(0);
+      return;
+    }
+
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunksRef.current = [];
+        recordingStartTimeRef.current = Date.now();
+
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const elapsed = recordingStartTimeRef.current ? (Date.now() - recordingStartTimeRef.current) / 1000 : 0;
+          setPendingVoiceUrl(audioUrl);
+          setPendingVoiceDuration(elapsed);
+
+          stream.getTracks().forEach((track) => track.stop());
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+        playStartRecordingSound();
+      } catch (err) {
+        console.error("Microphone access error:", err);
+        alert("Could not access your microphone. Please check permissions.");
+      }
+    } else {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
+      playStopRecordingSound();
+    }
+  };
+
+  const handleThumbsMessage = (msgId: string, ratingType: "like" | "dislike") => {
+    setLikedMessages((prev) => {
+      const current = prev[msgId];
+      if (current === ratingType) {
+        // Toggle off
+        const next = { ...prev };
+        delete next[msgId];
+        return next;
+      }
+      return { ...prev, [msgId]: ratingType };
+    });
+  };
+
+  const heroStyle = {
+    transform: scrollY < 300 ? `translateY(${scrollY * 0.2}px)` : "none",
+    opacity: scrollY < 300 ? Math.max(0.1, 1 - scrollY * 0.003) : 0.1,
   };
 
   return (
-    <div className="relative min-h-screen text-white flex flex-col items-center">
-      {/* Centered App Container wrapper */}
-      <div className="w-full max-w-4xl min-h-screen bg-black/60 shadow-2xl flex flex-col border-x border-white/5 pb-20">
-        
-        {/* Sticky Search bar at top */}
-        <SearchBar
-          onSearch={handleSearch}
-          isLoading={isLoading}
-          activeQuery={searchQuery}
-          interpretedQuery={aiInterpretation}
-          onClear={handleClear}
-        />
+    <>
+      {/* Header bar section */}
+      <header className="top-nav">
+        <div className="logo">weQRAi</div>
+        <button
+          className={`menu-toggle ${isMenuOpen ? "active" : ""}`}
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+        >
+          <span style={isMenuOpen ? { transform: "rotate(45deg) translate(5px, 5px)" } : undefined}></span>
+          <span style={isMenuOpen ? { opacity: 0 } : undefined}></span>
+          <span style={isMenuOpen ? { transform: "rotate(-45deg) translate(6px, -6px)" } : undefined}></span>
+        </button>
+        <nav className={`nav-links ${isMenuOpen ? "active" : ""}`}>
+          <a href="#home" onClick={() => setIsMenuOpen(false)}>Home</a>
+          <a href="#menu" onClick={() => setIsMenuOpen(false)}>Menu</a>
+          <a href="#about" onClick={() => setIsMenuOpen(false)}>About</a>
+          <a href="#contact" onClick={() => setIsMenuOpen(false)}>Contact</a>
+        </nav>
+      </header>
 
-        {/* Hero Branding Card Section */}
-        <div className="px-4 pt-6 pb-2">
-          <div className="relative overflow-hidden w-full rounded-3xl bg-gradient-to-r from-brand-from to-[#4a1215]/80 p-5 border border-white/10 shadow-lg">
-            <div className="absolute right-4 bottom-0 opacity-10 pointer-events-none">
-              <ShoppingBag className="w-32 h-32 text-white" />
-            </div>
-            
-            <div className="flex flex-col gap-2 relative z-10">
-              <span className="bg-accent-brand text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full w-fit">
-                Open Now
-              </span>
-              <h1 className="text-xl md:text-3xl font-extrabold tracking-tight">
-                Café Mocha Menu
-              </h1>
-              
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1 text-xs text-text-muted">
-                <span className="flex items-center gap-1 font-semibold text-white">
-                  <Star className="w-3.5 h-3.5 fill-star-gold text-star-gold" />
-                  4.8 (1.2k+ reviews)
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" />
-                  Downtown 5th Ave
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  15 - 25 min delivery
-                </span>
-              </div>
-            </div>
+      {/* Main page layout */}
+      <main id="home">
+        <section className="hero" style={heroStyle}>
+          <h1>find your preference with our chat bot</h1>
+          <button className="popular-btn" onClick={() => {
+            // Standard action: filter popular
+            handleTagClick("popular");
+          }}>
+            <span className="dot"></span>
+            POPULAR
+          </button>
+        </section>
+
+        {isLoading && items.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-muted italic">Loading dishes...</p>
           </div>
+        ) : errorCode ? (
+          <div className="text-center py-20 px-4">
+            <p className="text-error">{errorCode}</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-20 px-6">
+            <p className="text-muted text-base font-medium mb-1">No dishes match your choice</p>
+            <p className="text-muted text-xs">Try selecting a different filter option or querying the chat agent.</p>
+          </div>
+        ) : (
+          <div className="food-grid" id="menu">
+            {items.map((item) => (
+              <Link href={`/item/${item.id}`} key={item.id} className="food-card">
+                <div className="image-wrapper">
+                  <img src={item.image} alt={item.name} />
+                </div>
+                <h2>{item.name}</h2>
+                <p>{item.description}</p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* Fixed bottom chatbot panel */}
+      <section className="chatbot-panel">
+        <div className="tags-container">
+          {tagOptions.map((tag) => (
+            <button
+              key={tag.id}
+              className={`tag-btn ${selectedTags.includes(tag.id) ? "selected" : ""}`}
+              onClick={() => handleTagClick(tag.id)}
+            >
+              <span className="dot"></span>
+              {tag.label}
+            </button>
+          ))}
         </div>
 
-        {/* Category Header Label */}
-        <div className="px-4 pt-6 pb-3">
-          <h2 className="text-lg font-bold tracking-tight text-white/95 uppercase border-l-4 border-accent-brand pl-3">
-            {searchQuery ? `Search Results for "${searchQuery}"` : "More Dishes by Café Mocha"}
-          </h2>
-        </div>
+        {/* Messaging thread panel */}
+        {chatMessages.length > 0 && (
+          <div className="chat-messages" id="chatMessages">
+            {chatMessages.map((msg) => (
+              <div key={msg.id} className={`chat-message ${msg.sender}`}>
+                {msg.voiceUrl ? (
+                  <VoiceMessageNode voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration || 0} />
+                ) : (
+                  msg.text
+                )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 px-4">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <div className="w-10 h-10 border-4 border-accent-brand border-t-transparent rounded-full animate-spin" />
-              <p className="text-text-muted text-sm italic">Browsing coffee kitchens...</p>
-            </div>
-          ) : errorCode ? (
-            <div className="text-center py-20 px-4 bg-surface-card rounded-2xl border border-white/5 my-4">
-              <p className="text-accent-brand font-medium mb-2">{errorCode}</p>
-              <button
-                onClick={() => handleSearch(searchQuery, false)}
-                className="text-xs underline hover:text-white transition-colors"
-              >
-                Retry Request
-              </button>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="text-center py-20 px-6 bg-surface-card/60 rounded-3xl border border-white/5 my-4">
-              <p className="text-text-muted text-base font-medium mb-1">No dishes match your search</p>
-              <p className="text-text-muted text-xs">Try looking for "Tacos", "Salad", "Spicy" or select another query.</p>
-              <button
-                onClick={handleClear}
-                className="mt-4 px-5 py-2 text-xs font-semibold bg-white/10 hover:bg-white/15 border border-white/10 text-white rounded-full transition-colors cursor-pointer"
-              >
-                Reset Menu Book
-              </button>
-            </div>
-          ) : (
-            /* Responsive Grid system */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {items.map((item) => (
-                <FoodCard
-                  key={item.id}
-                  item={item}
-                />
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
-    </div>
+                {msg.sender === "bot" && (
+                  <div className="bot-feedback">
+                    <button
+                      className={`feedback-btn ${likedMessages[msg.id] === "like" ? "active" : ""}`}
+                      onClick={() => handleThumbsMessage(msg.id, "like")}
+                      aria-label="Like this response"
+                    >
+                      <i className={likedMessages[msg.id] === "like" ? "fa-solid fa-thumbs-up" : "fa-regular fa-thumbs-up"}></i>
+                    </button>
+                    <button
+                      className={`feedback-btn ${likedMessages[msg.id] === "dislike" ? "active" : ""}`}
+                      onClick={() => handleThumbsMessage(msg.id, "dislike")}
+                      aria-label="Dislike this response"
+                    >
+                      <i className={likedMessages[msg.id] === "dislike" ? "fa-solid fa-thumbs-down" : "fa-regular fa-thumbs-down"}></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={chatMessagesEndRef} />
+          </div>
+        )}
+
+        {/* Input box wrap */}
+        <div className={`chat-input-wrapper ${isRecording ? "recording" : ""}`}>
+          <input
+            type="text"
+            id="chatInput"
+            className="chat-input"
+            placeholder={
+              isRecording
+                ? "Recording in progress..."
+                : pendingVoiceUrl
+                ? `🎤 Voice note ready (${formatDuration(pendingVoiceDuration)}). Click Send.`
+                : "Ask anything"
+            }
+            disabled={isRecording || !!pendingVoiceUrl}
+            value={chatInputText}
+            onChange={(e) => setChatInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSend();
+            }}
+          />
+          <button className="icon-btn send-btn" onClick={handleSend} aria-label="Send query">
+            <i className="fa-solid fa-paper-plane"></i>
+          </button>
+          <button className="icon-btn mic-btn" onClick={handleMicClick} aria-label="Microphone button">
+            <i className={`fa-solid ${pendingVoiceUrl ? "fa-trash" : isRecording ? "fa-pause" : "fa-microphone"}`}></i>
+          </button>
+        </div>
+      </section>
+    </>
   );
 }
