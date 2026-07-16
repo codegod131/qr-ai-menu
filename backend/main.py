@@ -3,7 +3,8 @@ import base64
 import os
 from typing import List, Optional
 from datetime import datetime
-from fastapi import FastAPI, Depends, HTTPException, Header, status
+from fastapi import FastAPI, Depends, HTTPException, Header, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import qrcode
@@ -12,6 +13,8 @@ from psycopg2.extras import RealDictCursor
 
 from database import get_db
 from embeddings import get_item_embedding
+from search_pipeline import search_vector_menu, transcribe_audio
+from storage import upload_base64_image
 
 app = FastAPI(title="QR AI Menu Backend")
 
@@ -59,6 +62,7 @@ class ItemUpdate(BaseModel):
 class ItemResponse(BaseModel):
     id: str
     business_id: str
+    business_slug: Optional[str] = None
     name: str
     price: float
     description: str
@@ -128,6 +132,49 @@ def generate_qr(req: QRRequest):
     img_str = base64.b64encode(buffered.getvalue()).decode()
     
     return {"qr_code_base64": img_str}
+
+@app.get("/api/qr/{business_slug}")
+def get_business_qr(business_slug: str, conn = Depends(get_db)):
+    """
+    Generate and serve a QR code image for a business menu.
+    Scanning the QR code redirects the customer to:
+    http://frontend.url/menu/{business_slug}
+    """
+    # 1. Verify that the business exists
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, name, slug FROM business WHERE slug = %s",
+            (business_slug.strip().lower(),)
+        )
+        business = cur.fetchone()
+        if not business:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Business with slug '{business_slug}' not found"
+            )
+    
+    # 2. Get frontend URL from env
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    menu_url = f"{frontend_url}/menu/{business['slug']}"
+    
+    # 3. Generate QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(menu_url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # 4. Save to buffer and return as streaming image response
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    buffered.seek(0)
+    
+    return StreamingResponse(buffered, media_type="image/png")
 
 # --- Business CRUD Endpoints ---
 
@@ -254,6 +301,18 @@ def create_item(
     Create a new catalog item. Requires authentication headers.
     The item is automatically linked to the authenticated business.
     """
+    # Check and upload base64 image if provided
+    if item.image_url and item.image_url.startswith("data:image/"):
+        try:
+            uploaded_url = upload_base64_image(item.image_url)
+            if uploaded_url:
+                item.image_url = uploaded_url
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload item image: {str(e)}"
+            )
+
     # Generate the vector embedding using text-embedding-004 model
     embedding_vector = get_item_embedding(item.name, item.description, item.tags)
 
@@ -275,6 +334,8 @@ def create_item(
             )
         )
         new_item = cur.fetchone()
+        if new_item:
+            new_item["business_slug"] = current_business["slug"]
         return new_item
 
 @app.get("/api/items", response_model=List[ItemResponse])
@@ -286,7 +347,7 @@ def list_items(business_slug: Optional[str] = None, conn = Depends(get_db)):
         if business_slug:
             cur.execute(
                 """
-                SELECT i.id, i.business_id, i.name, i.price, i.description, i.tags, i.image_url, i.created_at
+                SELECT i.id, i.business_id, b.slug AS business_slug, i.name, i.price, i.description, i.tags, i.image_url, i.created_at
                 FROM items i
                 JOIN business b ON i.business_id = b.id
                 WHERE b.slug = %s
@@ -297,9 +358,10 @@ def list_items(business_slug: Optional[str] = None, conn = Depends(get_db)):
         else:
             cur.execute(
                 """
-                SELECT id, business_id, name, price, description, tags, image_url, created_at
-                FROM items
-                ORDER BY name ASC
+                SELECT i.id, i.business_id, b.slug AS business_slug, i.name, i.price, i.description, i.tags, i.image_url, i.created_at
+                FROM items i
+                JOIN business b ON i.business_id = b.id
+                ORDER BY i.name ASC
                 """
             )
         return cur.fetchall()
@@ -312,7 +374,12 @@ def get_item(item_id: str, conn = Depends(get_db)):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT id, business_id, name, price, description, tags, image_url, created_at FROM items WHERE id = %s",
+                """
+                SELECT i.id, i.business_id, b.slug AS business_slug, i.name, i.price, i.description, i.tags, i.image_url, i.created_at
+                FROM items i
+                JOIN business b ON i.business_id = b.id
+                WHERE i.id = %s
+                """,
                 (item_id,)
             )
             item = cur.fetchone()
@@ -360,6 +427,18 @@ def update_item(
                     detail="You are not authorized to update items for another business"
                 )
             
+        # Check and upload base64 image if provided
+        if item_update.image_url and item_update.image_url.startswith("data:image/"):
+            try:
+                uploaded_url = upload_base64_image(item_update.image_url)
+                if uploaded_url:
+                    item_update.image_url = uploaded_url
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to upload item image: {str(e)}"
+                )
+
         # Generate new vector embedding using text-embedding-004 model
         embedding_vector = get_item_embedding(item_update.name, item_update.description, item_update.tags)
             
@@ -383,6 +462,8 @@ def update_item(
                 )
             )
             updated = cur.fetchone()
+            if updated:
+                updated["business_slug"] = current_business["slug"]
             return updated
     except psycopg2.Error as e:
         if "invalid input syntax for type uuid" in str(e):
@@ -429,3 +510,52 @@ def delete_item(
             )
         raise
     return None
+
+
+@app.post("/api/query")
+async def query_menu(
+    business_slug: str = Form(...),
+    query: Optional[str] = Form(None),
+    audio: Optional[UploadFile] = File(None)
+):
+    """
+    Unified vector search endpoint supporting text search and speech-to-text voice search.
+    """
+    if not query and not audio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either query (text) or audio file must be provided."
+        )
+
+    # 1. Handle voice input transcription
+    search_text = query
+    if audio:
+        try:
+            audio_bytes = await audio.read()
+            if len(audio_bytes) == 0:
+                raise ValueError("Uploaded audio file is empty.")
+            search_text = transcribe_audio(audio_bytes)
+            if not search_text:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Could not transcribe audio. Please speak clearly or try text search."
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Speech recognition error: {str(e)}"
+            )
+
+    # 2. Perform vector search and LLM re-ranking
+    try:
+        items, interpreted_query = search_vector_menu(business_slug, search_text)
+        return {
+            "items": items,
+            "interpretedQuery": interpreted_query,
+            "transcribedText": search_text if audio else None
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Vector search failed: {str(e)}"
+        )

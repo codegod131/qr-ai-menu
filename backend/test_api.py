@@ -16,8 +16,8 @@ class TestAPI(unittest.TestCase):
 
     @patch("main.get_item_embedding")
     def test_e2e_flow(self, mock_get_embedding):
-        # Mock the embedding generator to return a 768-dimension vector
-        mock_get_embedding.return_value = [0.1] * 768
+        # Mock the embedding generator to return a 3072-dimension vector
+        mock_get_embedding.return_value = [0.1] * 3072
 
         # 1. Check health
         response = self.client.get("/api/health")
@@ -47,6 +47,16 @@ class TestAPI(unittest.TestCase):
         response = self.client.get(f"/api/business/{self.test_slug}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], biz_id)
+
+        # 3.1 Fetch business QR code (should succeed and return PNG)
+        response = self.client.get(f"/api/qr/{self.test_slug}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertTrue(len(response.content) > 0)
+
+        # 3.2 Fetch QR code for non-existent business (should fail with 404)
+        response = self.client.get("/api/qr/non-existent-restaurant-slug")
+        self.assertEqual(response.status_code, 404)
 
         # 4. Create Item without headers (should fail with 422 - validation/header missing)
         item_data = {

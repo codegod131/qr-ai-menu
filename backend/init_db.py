@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS items (
     price NUMERIC(10, 2) NOT NULL,
     description TEXT NOT NULL,
     tags TEXT[] DEFAULT '{}',
-    -- Vector dimension: 768 for Gemini text-embedding-004
-    embedding vector(768), 
+    -- Vector dimension: 3072 for Gemini Embedding 2
+    embedding halfvec(3072), 
     image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS items (
 -- Create a vector index for fast similarity search (HNSW index)
 CREATE INDEX IF NOT EXISTS items_embedding_hnsw_idx 
 ON items 
-USING hnsw (embedding vector_cosine_ops);
+USING hnsw (embedding halfvec_cosine_ops);
 
 -- Search Logs Table (for Analytics/Innovation Accounting)
 CREATE TABLE IF NOT EXISTS search_logs (
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS search_logs (
 
 -- Function for matching items based on vector distance and filtering by business slug
 CREATE OR REPLACE FUNCTION match_items (
-  query_embedding vector,
+  query_embedding halfvec,
   match_threshold float,
   match_count int,
   target_business_slug varchar
@@ -79,7 +79,7 @@ BEGIN
   RETURN QUERY
   SELECT
     items.id,
-    items.name,
+    items.name::text,
     items.price,
     items.description,
     items.tags,

@@ -7,8 +7,11 @@ const getBaseUrl = () => {
   return `http://localhost:${process.env.PORT || 3000}`;
 };
 
-export async function getMenuItems(): Promise<MenuItem[]> {
-  const res = await fetch(`${getBaseUrl()}/api/menu`, { cache: "no-store" });
+export async function getMenuItems(businessSlug?: string): Promise<MenuItem[]> {
+  const url = businessSlug 
+    ? `${getBaseUrl()}/api/menu?business_slug=${encodeURIComponent(businessSlug)}`
+    : `${getBaseUrl()}/api/menu`;
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error("Failed to fetch menu items");
   }
@@ -39,15 +42,23 @@ export async function searchMenu(query: string): Promise<MenuItem[]> {
 export interface AISearchResponse {
   items: MenuItem[];
   interpretedQuery: string;
+  transcribedText?: string;
 }
 
-export async function aiSearchMenu(query: string): Promise<AISearchResponse> {
+export async function aiSearchMenu(query: string | Blob, businessSlug?: string): Promise<AISearchResponse> {
+  const formData = new FormData();
+  if (typeof query === "string") {
+    formData.append("query", query);
+  } else {
+    formData.append("audio", query, "audio.webm");
+  }
+  if (businessSlug) {
+    formData.append("business_slug", businessSlug);
+  }
+
   const res = await fetch(`${getBaseUrl()}/api/menu/ai-search`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
+    body: formData,
     cache: "no-store",
   });
   if (!res.ok) {
@@ -102,6 +113,9 @@ export function mapBackendToMenuItem(item: any): MenuItem {
     image: item.image_url || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80",
     category,
     tags,
+    explanation: item.explanation,
+    business_slug: item.business_slug,
   };
 }
+
 

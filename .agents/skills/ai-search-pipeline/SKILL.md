@@ -42,7 +42,7 @@ Whenever an item is created or updated, we must generate a vector embedding of i
 1. **Source Text**: Combine attributes into a single string to preserve context:
    `text_to_embed = f"Name: {item.name}. Description: {item.description}. Tags: {', '.join(item.tags)}."`
 2. **Model Choice**: Use standard embedding models:
-   - **Gemini**: `text-embedding-004` (768 dimensions)
+   - **Gemini**: `gemini-embedding-2` (3072 dimensions)
    - **OpenAI**: `text-embedding-3-small` (1536 dimensions)
 3. **Storage**: Save the vector list directly into the `embedding` column of the `items` table.
 
