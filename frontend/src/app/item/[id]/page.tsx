@@ -38,7 +38,7 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
     return (
       <div className="min-h-screen text-white flex flex-col items-center justify-center bg-radial-to-b from-brand-from to-brand-to">
         <div className="w-10 h-10 border-4 border-accent-brand border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-text-muted text-sm italic">Loading chef's recipe...</p>
+        <p className="text-text-muted text-sm italic">Loading item details...</p>
       </div>
     );
   }
@@ -49,10 +49,10 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
         <div className="bg-surface-card p-8 rounded-3xl border border-white/5 max-w-sm w-full">
           <h2 className="text-xl font-bold mb-2">Item Not Found</h2>
           <p className="text-text-muted text-sm mb-6">
-            We couldn't find the dish you were looking for. It might have been updated or removed.
+            We couldn&apos;t find the item you were looking for. It might have been updated or removed.
           </p>
           <Link
-            href="/"
+            href="/menu/cafe-mocha"
             className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent-brand hover:bg-accent-brand-hover text-white text-sm font-semibold rounded-full transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -71,7 +71,7 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
         {/* Floating circular Back Action arrow button */}
         <div className="absolute top-4 left-4 z-30">
           <Link
-            href="/"
+            href={`/menu/${item.business_slug || "cafe-mocha"}`}
             className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 transition-colors text-white"
             aria-label="Back to main menu listing"
           >
@@ -101,7 +101,7 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
                   {item.name}
                 </h1>
                 <span className="text-xl sm:text-2xl font-black text-accent-brand whitespace-nowrap">
-                  ${item.price.toFixed(2)}
+                  ₹{item.price.toFixed(2)}
                 </span>
               </div>
               {item.category && (
@@ -132,7 +132,7 @@ export default function ItemDetailPage({ params }: ItemPageProps) {
           {/* Recipe descriptions */}
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted">
-              About this dish
+              About this item
             </h3>
             <p className="text-sm text-text-muted leading-relaxed font-sans">
               {item.description}

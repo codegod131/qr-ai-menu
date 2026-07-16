@@ -82,7 +82,7 @@ export default function SearchBar({
               type="text"
               value={val}
               onChange={(e) => setVal(e.target.value)}
-              placeholder="Search dishes, tags, ingredients..."
+              placeholder="Search items, tags, specifications..."
               className="w-full bg-[#111111]/90 text-white placeholder-text-muted text-sm pl-11 pr-10 py-3 rounded-full border border-white/10 outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand/40 transition-all duration-300 shadow-inner"
             />
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">

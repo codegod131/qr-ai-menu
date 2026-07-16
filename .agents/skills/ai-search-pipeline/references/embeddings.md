@@ -28,10 +28,10 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def get_gemini_embedding(text: str) -> list[float]:
     """
-    Generates 768-dimension embeddings using text-embedding-004.
+    Generates 3072-dimension embeddings using gemini-embedding-2.
     """
     response = genai.embed_content(
-        model="models/text-embedding-004",
+        model="models/gemini-embedding-2",
         content=text,
         task_type="retrieval_document", # or "retrieval_query" for queries
     )
@@ -67,12 +67,12 @@ def get_openai_embedding(text: str) -> list[float]:
 ---
 
 ## 4. Query Embedding Task Types
-When performing a search, query texts should be embedded with `task_type="retrieval_query"` (for Gemini text-embedding-004) to optimize relevance.
+When performing a search, query texts should be embedded with `task_type="retrieval_query"` (for Gemini gemini-embedding-2) to optimize relevance.
 
 ```python
 def get_gemini_query_embedding(query: str) -> list[float]:
     response = genai.embed_content(
-        model="models/text-embedding-004",
+        model="models/gemini-embedding-2",
         content=query,
         task_type="retrieval_query",
     )

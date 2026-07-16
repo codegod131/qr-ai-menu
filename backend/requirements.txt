@@ -8,3 +8,6 @@ pillow
 pydantic
 pydantic-settings
 google-genai
+google-cloud-speech
+python-multipart
+boto3

@@ -9,6 +9,8 @@ export interface MenuItem {
   image: string;            // path or remote URL
   category?: string;
   tags?: string[];          // optional item tags
+  explanation?: string;     // AI match explanation
+  business_slug?: string;   // business slug for routing
 }
 
 export let menuItems: MenuItem[] = [

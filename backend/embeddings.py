@@ -6,13 +6,17 @@ from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-# Initialize client wrapper. The google-genai Client automatically uses GEMINI_API_KEY from environment.
+# Initialize client wrapper using Application Default Credentials (ADC) via Vertex AI / Enterprise Agent Platform.
 client = None
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    client = genai.Client(api_key=api_key)
-else:
-    logger.warning("GEMINI_API_KEY env variable is not set. Embedding generation may fail.")
+try:
+    client = genai.Client()
+    logger.info("Gemini Client initialized successfully using Application Default Credentials.")
+except Exception as e:
+    logger.warning(
+        f"Could not initialize Gemini Client: {e}. "
+        "Embedding generation will fall back to dummy vectors."
+    )
+    client = None
 
 def formulate_item_text(name: str, description: str, tags: list[str]) -> str:
     """
@@ -23,21 +27,24 @@ def formulate_item_text(name: str, description: str, tags: list[str]) -> str:
 
 def get_gemini_embedding(text: str) -> list[float]:
     """
-    Generates 768-dimension embeddings using the Gemini text-embedding-004 model.
+    Generates 3072-dimension embeddings using the Gemini Embedding 2 model.
     """
     global client
+
+    # Attempt to re-initialize client if not ready
     if not client:
-        current_key = os.getenv("GEMINI_API_KEY")
-        if not current_key:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="GEMINI_API_KEY is not configured on the server."
-            )
-        client = genai.Client(api_key=current_key)
-    
+        try:
+            client = genai.Client()
+        except Exception:
+            pass
+
+    if not client:
+        logger.warning("Gemini Client not configured (no API key or Application Default Credentials). Returning dummy embedding.")
+        return [0.0] * 3072
+
     try:
         response = client.models.embed_content(
-            model="text-embedding-004",
+            model="gemini-embedding-2",
             contents=text,
             config=types.EmbedContentConfig(
                 task_type="RETRIEVAL_DOCUMENT", # Optimized for catalog indexing/documents
@@ -45,7 +52,7 @@ def get_gemini_embedding(text: str) -> list[float]:
         )
         if response.embeddings and len(response.embeddings) > 0:
             return response.embeddings[0].values
-        
+
         raise ValueError("Empty embeddings list returned from Gemini API")
     except Exception as e:
         logger.error(f"Error calling Gemini Embedding API: {str(e)}")
@@ -60,3 +67,4 @@ def get_item_embedding(name: str, description: str, tags: list[str]) -> list[flo
     """
     formatted_text = formulate_item_text(name, description, tags)
     return get_gemini_embedding(formatted_text)
+

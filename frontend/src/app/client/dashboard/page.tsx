@@ -4,68 +4,9 @@ import React, { useEffect, useState } from "react";
 import imageCompression from "browser-image-compression";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PlusCircle, LogOut, Sparkles, Utensils, Check, HelpCircle, ArrowLeft, RefreshCw, Trash } from "lucide-react";
+import { PlusCircle, LogOut, Check, ArrowLeft, RefreshCw } from "lucide-react";
 import { getMenuItems } from "@/lib/api";
 import { MenuItem } from "@/lib/dummy-data";
-
-// Researched classic food items templates to let restaurant client pre-fill instantly
-interface FoodTemplate {
-  name: string;
-  price: number;
-  kcal: number;
-  category: string;
-  description: string;
-  image: string;
-  tags: string[];
-}
-
-const PRESET_TEMPLATES: FoodTemplate[] = [
-  {
-    name: "Classic Sourdough Margherita",
-    price: 14.50,
-    kcal: 720,
-    category: "Mains",
-    description: "Authentic wood-fired sourdough pizza crust topped with rich San Marzano tomato pulp, fresh buffalo mozzarella, aromatic sweet basil leaves, and cold-pressed extra virgin olive oil.",
-    image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=600&auto=format&fit=crop&q=80",
-    tags: ["vegetarian", "classic", "oven-baked", "italian"]
-  },
-  {
-    name: "Grilled Chicken Caesar Salad",
-    price: 12.00,
-    kcal: 440,
-    category: "Salads",
-    description: "Tender flame-grilled rosemary chicken breast served over a bed of crisp Romaine lettuce, roasted garlic croutons, aged parmesan shavings, and house caesar cream.",
-    image: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=600&auto=format&fit=crop&q=80",
-    tags: ["healthy", "creamy", "poultry", "low-carb"]
-  },
-  {
-    name: "Ceremonial Iced Matcha Latte",
-    price: 6.50,
-    kcal: 140,
-    category: "Drinks",
-    description: "Premium Japanese stone-ground Uji matcha whisked with water and poured over cold organic oat milk, lightly sweetened with pure organic agave nectar.",
-    image: "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=600&auto=format&fit=crop&q=80",
-    tags: ["organic", "caffeine", "japanese", "cold"]
-  },
-  {
-    name: "Warm Molten Lava Cake",
-    price: 8.50,
-    kcal: 590,
-    category: "Desserts",
-    description: "Decadent dark chocolate soufflé cake baked with a rich liquid fudge center, served dusted with powdered confectioner sugar and fresh raspberries.",
-    image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&auto=format&fit=crop&q=80",
-    tags: ["sweet", "chocolate", "hot-dessert", "indulgent"]
-  },
-  {
-    name: "Rich Chashu Pork Ramen",
-    price: 16.00,
-    kcal: 920,
-    category: "Japanese",
-    description: "Slow-simmered rich tonkotsu pork broth, thin springy wheat noodles, melt-in-your-mouth braised pork belly slices, marinated soft-boiled egg, scallions, bamboo shoots, and roasted seaweed.",
-    image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&auto=format&fit=crop&q=80",
-    tags: ["soup", "hearty", "japanese", "savory"]
-  }
-];
 
 export default function ClientDashboardPage() {
   const router = useRouter();
@@ -78,7 +19,6 @@ export default function ClientDashboardPage() {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [kcal, setKcal] = useState("");
-  const [category, setCategory] = useState("Mains");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   const [tagsStr, setTagsStr] = useState("");
@@ -124,34 +64,26 @@ export default function ClientDashboardPage() {
       router.push("/client/login");
     } else {
       setIsAdmin(true);
-      fetchCurrentDishes();
+      fetchCurrentItems();
     }
   }, [router]);
 
   // Fetch items from our API
-  async function fetchCurrentDishes() {
+  async function fetchCurrentItems() {
     try {
       const data = await getMenuItems();
       setActiveItems(data);
     } catch (err) {
-      console.error("Failed to load dashboard dish items", err);
+      console.error("Failed to load dashboard items", err);
     }
   }
 
-  // Pre-fill fields with selected researched template options
-  const handlePreFill = (tpl: FoodTemplate) => {
-    setName(tpl.name);
-    setPrice(tpl.price.toString());
-    setKcal(tpl.kcal.toString());
-    setCategory(tpl.category);
-    setDescription(tpl.description);
-    setImage(tpl.image);
-    setTagsStr(tpl.tags.join(", "));
-  };
+
 
   const handleLogout = () => {
     localStorage.removeItem("client_logged_in");
     localStorage.removeItem("client_email");
+    localStorage.removeItem("client_pin");
     router.push("/client/login");
   };
 
@@ -173,7 +105,6 @@ export default function ClientDashboardPage() {
       name,
       price: parseFloat(price) || 0,
       kcal: parseInt(kcal) || 0,
-      category,
       description,
       image: (typeof image === "string" && image.trim()) 
         ? image.trim() 
@@ -193,7 +124,7 @@ export default function ClientDashboardPage() {
       if (response.ok) {
         setIsSuccess(true);
         // Refresh local listings display
-        await fetchCurrentDishes();
+        await fetchCurrentItems();
 
         // Clear fields
         setName("");
@@ -207,7 +138,7 @@ export default function ClientDashboardPage() {
         setTimeout(() => setIsSuccess(false), 3000);
       } else {
         const errData = await response.json();
-        alert(`Error adding dish: ${errData.error || "Failed registration"}`);
+        alert(`Error adding item: ${errData.error || "Failed registration"}`);
       }
     } catch (err) {
       alert("Network compilation error occurred.");
@@ -260,36 +191,13 @@ export default function ClientDashboardPage() {
           {/* Left Column: Form submissions (6 cols) */}
           <section className="lg:col-span-7 flex flex-col gap-6">
             
-            {/* Quick pre-select preset templates */}
-            <div className="glass-panel border border-white/5 rounded-3xl p-5 shadow-lg">
-              <span className="flex items-center gap-1.5 text-xs font-bold text-accent-brand uppercase tracking-wider mb-3">
-                <Sparkles className="w-4 h-4 fill-accent-brand/10" />
-                Researched Popular Dish Presets
-              </span>
-              <p className="text-[11px] text-text-muted mb-4">
-                Click any pre-researched item template below to instantly pre-fill metadata fields.
-              </p>
-              
-              <div className="flex flex-wrap gap-2">
-                {PRESET_TEMPLATES.map((tpl) => (
-                  <button
-                    key={tpl.name}
-                    type="button"
-                    onClick={() => handlePreFill(tpl)}
-                    className="text-xs bg-white/5 border border-white/10 hover:border-accent-brand/40 hover:bg-accent-brand/5 text-white/90 hover:text-white px-3 py-2 rounded-xl transition-all cursor-pointer text-left font-semibold flex items-center gap-1"
-                  >
-                    <Utensils className="w-3.5 h-3.5 text-text-muted" />
-                    <span>{tpl.name.split(" ").slice(0, 3).join(" ")}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+
 
             {/* General dynamic edit form */}
             <div className="glass-panel border border-white/10 rounded-3xl p-6 shadow-xl">
               <h3 className="text-base font-extrabold mb-4 flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-accent-brand" />
-                <span>Add Custom Food Item</span>
+                <span>Add Custom Item</span>
               </h3>
 
               {isSuccess && (
@@ -301,10 +209,10 @@ export default function ClientDashboardPage() {
 
               <form onSubmit={handleFormSubmit} className="flex flex-col gap-4">
                 
-                {/* Row 1: Dish name */}
+                {/* Row 1: Item name */}
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
-                    Dish/Item Name *
+                    Item Name *
                   </label>
                   <input
                     type="text"
@@ -316,48 +224,26 @@ export default function ClientDashboardPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Price field */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
-                      Price ($) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      placeholder="e.g. 14.99"
-                      className="w-full bg-[#121212] text-white text-sm px-4 py-3 rounded-xl border border-white/10 outline-none focus:border-accent-brand transition-colors"
-                    />
-                  </div>
-
-                  {/* Category select fields */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
-                      Menu Category
-                    </label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-[#121212] text-white text-sm px-4 py-3 rounded-xl border border-white/10 outline-none focus:border-accent-brand transition-colors appearance-none cursor-pointer"
-                    >
-                      <option value="Mains">Mains (Fast food etc)</option>
-                      <option value="Soups">Soups & Broths</option>
-                      <option value="Salads">Salads & Bowls</option>
-                      <option value="Breakfast">Breakfast & Waffles</option>
-                      <option value="Japanese">Japanese Rolls</option>
-                      <option value="Drinks">Beverages & Coffee</option>
-                      <option value="Desserts">Sweet Treats</option>
-                    </select>
-                  </div>
+                {/* Price field */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
+                    Price (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="e.g. 14.99"
+                    className="w-full bg-[#121212] text-white text-sm px-4 py-3 rounded-xl border border-white/10 outline-none focus:border-accent-brand transition-colors"
+                  />
                 </div>
 
                   {/* Optional Image Upload or URL */}
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-text-muted font-semibold uppercase tracking-wider pl-1">
-                      Dish Image (Optional file or URL)
+                      Item Image (Optional file or URL)
                     </label>
                     <div className="flex flex-col gap-2">
                       {/* Local File Selector with compress indicator */}
@@ -421,7 +307,7 @@ export default function ClientDashboardPage() {
                 <div className="flex flex-col gap-1">
                   <div className="flex justify-between items-center px-1">
                     <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
-                      Dishes Tags
+                      Item Tags
                     </label>
                     <span className="text-[10px] text-text-muted/75">
                       Comma separated (e.g. spicy, vegan, cheesy)
@@ -469,7 +355,7 @@ export default function ClientDashboardPage() {
                   ) : (
                     <>
                       <PlusCircle className="w-4 h-4" />
-                      <span>Register Dish Item</span>
+                      <span>Register Item</span>
                     </>
                   )}
                 </button>
@@ -519,7 +405,7 @@ export default function ClientDashboardPage() {
                       
                       <div className="flex justify-between items-center mt-2.5">
                         <span className="font-extrabold text-white">
-                          ${item.price.toFixed(2)}
+                          ₹{item.price.toFixed(2)}
                         </span>
                         
                         {item.tags && item.tags.length > 0 && (

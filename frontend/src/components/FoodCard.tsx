@@ -52,7 +52,7 @@ export default function FoodCard({ item }: FoodCardProps) {
 
           {/* Pricing Highlight Tag */}
           <div className="text-lg font-extrabold text-white mt-3">
-            ${price.toFixed(2)}
+            ₹{price.toFixed(2)}
           </div>
         </div>
 

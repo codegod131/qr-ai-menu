@@ -2,32 +2,43 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, ChevronRight, AlertCircle, ShoppingBag } from "lucide-react";
+import { Lock, ChevronRight, AlertCircle, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 
 export default function ClientLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
-    // Simulate login authentication checks after a delay
-    setTimeout(() => {
-      if (email.trim().toLowerCase() === "admin@cafemocha.com" && password === "mocha123") {
+    try {
+      const response = await fetch("/api/client/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pin }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         localStorage.setItem("client_logged_in", "true");
-        localStorage.setItem("client_email", email);
+        localStorage.setItem("client_pin", pin);
         router.push("/client/dashboard");
       } else {
-        setError("Invalid email/password credential. Tip: admin@cafemocha.com & mocha123");
+        setError(data.error || "Invalid business PIN. Tip: mocha123");
         setIsSubmitting(false);
       }
-    }, 1200);
+    } catch (err: any) {
+      setError("Failed to authenticate. Please check if the backend is running.");
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -55,7 +66,7 @@ export default function ClientLoginPage() {
           Welcome Back
         </h2>
         <p className="text-xs text-text-muted mb-6">
-          Access your restaurant control panel to update dishes.
+          Access your restaurant control panel using the Business PIN.
         </p>
 
         {error && (
@@ -67,29 +78,11 @@ export default function ClientLoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           
-          {/* Email input field */}
+          {/* PIN input field */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-text-muted font-bold uppercase tracking-wider pl-1">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@cafemocha.com"
-                className="w-full bg-[#111111]/90 text-white placeholder-text-muted/60 text-sm pl-11 pr-4 py-3.5 rounded-full border border-white/10 outline-none focus:border-accent-brand transition-all duration-300"
-              />
-            </div>
-          </div>
-
-          {/* Password input field */}
-          <div className="flex flex-col gap-1.5 col-span-1">
             <div className="flex justify-between items-center px-1">
               <label className="text-xs text-text-muted font-bold uppercase tracking-wider">
-                Password
+                Business PIN
               </label>
               <span className="text-[10px] text-accent-brand/70 font-semibold lowercase italic">
                 mocha123
@@ -100,8 +93,8 @@ export default function ClientLoginPage() {
               <input
                 type="password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
                 placeholder="••••••••"
                 className="w-full bg-[#111111]/90 text-white placeholder-text-muted/60 text-sm pl-11 pr-4 py-3.5 rounded-full border border-white/10 outline-none focus:border-accent-brand transition-all duration-300"
               />
@@ -134,12 +127,11 @@ export default function ClientLoginPage() {
       </div>
 
       <div className="mt-8 text-center text-xs text-text-muted flex flex-col gap-1.5">
-        <span>Standard Credentials for Demo Review:</span>
-        <span className="font-mono text-white/80 bg-white/5 border border-white/5 py-1 px-3 rounded-full">
-          Email: <span className="text-info-kcal">admin@cafemocha.com</span> / Pass: <span className="text-star-gold">mocha123</span>
+        <span>Standard Business PIN for Demo Review:</span>
+        <span className="font-mono text-white/80 bg-white/5 border border-white/5 py-1.5 px-4 rounded-full">
+          PIN: <span className="text-star-gold font-bold">mocha123</span>
         </span>
       </div>
-
     </div>
   );
 }

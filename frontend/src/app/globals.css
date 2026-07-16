@@ -51,14 +51,14 @@ body {
   font-family: 'Inter', sans-serif;
   line-height: 1.5;
   min-height: 100vh;
-  padding-bottom: 300px; /* Space for fixed bottom panel */
+  padding-bottom: 120px; /* Space for compact fixed bottom panel */
   overflow-x: hidden;
 }
 
 /* Header */
 .top-nav {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 1.5rem 2rem;
   background-color: var(--nav-bg);
@@ -234,7 +234,7 @@ main {
   background-color: var(--panel-bg);
   border-top-left-radius: var(--border-radius-lg);
   border-top-right-radius: var(--border-radius-lg);
-  padding: 2.5rem 2rem 2rem;
+  padding: 1.5rem 2rem 1.5rem; /* Sleek padding for compact search bar */
   box-shadow: 0 -5px 40px rgba(0,0,0,0.6);
   display: flex;
   flex-direction: column;
@@ -258,9 +258,9 @@ main {
       from var(--glow-angle, 0deg),
       transparent 0%,
       transparent 25%,
-      rgba(200, 200, 200, 0.5) 35%,
-      rgba(255, 255, 255, 0.7) 40%,
-      rgba(200, 200, 200, 0.5) 45%,
+      rgba(200, 200, 200, 0.4) 35%,
+      rgba(255, 255, 255, 0.6) 40%,
+      rgba(200, 200, 200, 0.4) 45%,
       transparent 55%,
       transparent 100%
   );
@@ -275,6 +275,37 @@ main {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   padding: 1.5px;
+}
+
+/* Color running through the sides while searching (Active blue/purple glow) */
+.chatbot-panel.searching::before {
+  background: conic-gradient(
+      from var(--glow-angle, 0deg),
+      transparent 0%,
+      transparent 15%,
+      rgba(0, 191, 255, 0.8) 25%,   /* Deep Sky Blue */
+      rgba(138, 43, 226, 0.9) 35%,  /* Blue Violet */
+      rgba(244, 63, 94, 0.9) 45%,   /* Rose Red */
+      rgba(0, 255, 204, 0.8) 55%,   /* Cyan */
+      transparent 65%,
+      transparent 100%
+  );
+  animation: flowGlow 1.5s linear infinite; /* Spin faster to show activity */
+}
+
+/* Color running through the sides when searching completes (Success emerald green glow) */
+.chatbot-panel.done::before {
+  background: conic-gradient(
+      from var(--glow-angle, 0deg),
+      transparent 0%,
+      transparent 25%,
+      rgba(16, 185, 129, 0.8) 35%,  /* Emerald green */
+      rgba(52, 211, 153, 0.9) 40%,  /* Mint green */
+      rgba(16, 185, 129, 0.8) 45%,  /* Emerald green */
+      transparent 55%,
+      transparent 100%
+  );
+  animation: flowGlow 2.5s linear infinite;
 }
 
 @property --glow-angle {
@@ -417,6 +448,52 @@ main {
   opacity: 0.7;
   margin-left: 4px;
   font-weight: 600;
+}
+
+.search-feedback-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 0.8rem;
+  padding: 0 0.5rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.last-query-btn {
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.last-query-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.last-query-btn.voice.playing {
+  background-color: var(--accent-red);
+  border-color: var(--accent-red);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(183, 0, 0, 0.4);
+}
+
+.feedback-buttons {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
 }
 
 .chat-input-wrapper {
